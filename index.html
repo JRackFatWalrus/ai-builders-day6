@@ -1,0 +1,622 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#172033">
+<title>Catch the Falling Items!</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  background: #172033;
+  font-family: Arial, sans-serif;
+  color: white;
+  overscroll-behavior: none;
+}
+
+.game-container {
+  width: min(95vw, 650px);
+  text-align: center;
+}
+
+h1 {
+  color: #ffd166;
+  margin: 0 0 10px;
+  font-size: clamp(22px, 5vw, 32px);
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  margin: 12px 5px;
+  font-size: 19px;
+  font-weight: bold;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(#233c59, #497b91);
+  border: 4px solid #ffd166;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px #0006;
+  touch-action: none;
+}
+
+button {
+  margin: 8px;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 25px;
+  background: #ffd166;
+  color: #172033;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button:active:not(:disabled) {
+  background: #ffb703;
+  transform: scale(0.96);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.instructions {
+  color: #cbd5e1;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+/* Mobile movement controls */
+
+.mobile-controls {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  margin: 14px auto 5px;
+  width: 100%;
+}
+
+.control-button {
+  flex: 1;
+  max-width: 180px;
+  min-height: 65px;
+  margin: 0;
+  padding: 12px;
+  border: 3px solid #ffd166;
+  border-radius: 16px;
+  background: #263b56;
+  color: #ffd166;
+  font-size: 25px;
+  font-weight: bold;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.control-button:active,
+.control-button.pressed {
+  background: #ffd166;
+  color: #172033;
+  transform: scale(0.96);
+}
+
+#message {
+  min-height: 28px;
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #ffd166;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 8px;
+    align-items: flex-start;
+  }
+
+  .game-container {
+    width: 100%;
+    max-width: 650px;
+  }
+
+  h1 {
+    font-size: 23px;
+  }
+
+  .hud {
+    font-size: 16px;
+    margin: 10px 4px;
+  }
+
+  button {
+    padding: 12px 20px;
+    font-size: 15px;
+  }
+
+  .mobile-controls {
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .control-button {
+    min-height: 70px;
+    font-size: 23px;
+  }
+
+  .instructions {
+    font-size: 12px;
+  }
+
+  #message {
+    font-size: 17px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:hover:not(:disabled) {
+    background: #ffb703;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="game-container">
+
+  <h1>🧺 Catch the Falling Items!</h1>
+
+  <div class="hud">
+    <span>⭐ Score: <span id="score">0</span></span>
+    <span>❤️ Misses: <span id="misses">0</span>/3</span>
+  </div>
+
+  <canvas id="game" width="600" height="450"></canvas>
+
+  <div id="message">Ready to play?</div>
+
+  <button id="start">▶ Start Game</button>
+  <button id="restart" disabled>🔄 Restart</button>
+
+  <!-- Touchscreen movement controls -->
+
+  <div class="mobile-controls">
+    <button
+      class="control-button"
+      id="leftButton"
+      aria-label="Move basket left"
+      type="button"
+    >◀ LEFT</button>
+
+    <button
+      class="control-button"
+      id="rightButton"
+      aria-label="Move basket right"
+      type="button"
+    >RIGHT ▶</button>
+  </div>
+
+  <div class="instructions">
+    Use the arrow keys or touchscreen buttons to move your basket!
+    Catch the falling items and avoid missing three.
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const scoreDisplay = document.getElementById("score");
+const missesDisplay = document.getElementById("misses");
+const message = document.getElementById("message");
+
+const startButton = document.getElementById("start");
+const restartButton = document.getElementById("restart");
+
+const leftButton = document.getElementById("leftButton");
+const rightButton = document.getElementById("rightButton");
+
+const basket = {
+  x: 260,
+  y: 395,
+  width: 80,
+  height: 35,
+  speed: 7
+};
+
+let items = [];
+let score = 0;
+let misses = 0;
+let keys = {};
+
+let gameOver = false;
+let gameStarted = false;
+let animationId = null;
+
+let lastSpawn = 0;
+let spawnInterval = 1100;
+let fallSpeed = 2.5;
+
+const itemEmojis = ["🍎", "🍊", "🍓", "🍋", "🍇", "⭐"];
+
+function drawBackground() {
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+
+  for (let i = 0; i < 25; i++) {
+    const x = (i * 97) % canvas.width;
+    const y = (i * 67) % canvas.height;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawBasket() {
+  ctx.font = "65px Arial";
+  ctx.textAlign = "center";
+
+  ctx.fillText(
+    "🧺",
+    basket.x + basket.width / 2,
+    basket.y + 42
+  );
+}
+
+function drawItems() {
+  ctx.textAlign = "center";
+
+  items.forEach(item => {
+    ctx.font = "30px Arial";
+
+    ctx.fillText(
+      item.emoji,
+      item.x + item.size / 2,
+      item.y + item.size
+    );
+  });
+}
+
+function drawReadyScreen() {
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "#ffd166";
+  ctx.font = "bold 36px Arial";
+  ctx.fillText("READY TO PLAY?", 300, 170);
+
+  ctx.fillStyle = "white";
+  ctx.font = "21px Arial";
+  ctx.fillText("Catch the falling items!", 300, 220);
+
+  ctx.font = "18px Arial";
+  ctx.fillText("Use the arrow keys or buttons", 300, 260);
+
+  ctx.fillText("Don't miss 3 items!", 300, 295);
+}
+
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd166";
+
+  ctx.font = "bold 42px Arial";
+  ctx.fillText("GAME OVER", 300, 190);
+
+  ctx.fillStyle = "white";
+  ctx.font = "24px Arial";
+  ctx.fillText("Your Score: " + score, 300, 240);
+
+  ctx.font = "18px Arial";
+  ctx.fillText("Press Restart to play again!", 300, 285);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBackground();
+  drawItems();
+  drawBasket();
+
+  if (!gameStarted && !gameOver) {
+    drawReadyScreen();
+  }
+
+  if (gameOver) {
+    drawGameOver();
+  }
+}
+
+function clearControls() {
+  keys = {};
+
+  leftButton.classList.remove("pressed");
+  rightButton.classList.remove("pressed");
+}
+
+function resetGame() {
+  if (animationId !== null) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
+  score = 0;
+  misses = 0;
+  items = [];
+
+  gameOver = false;
+  gameStarted = false;
+
+  lastSpawn = 0;
+  spawnInterval = 1100;
+  fallSpeed = 2.5;
+
+  basket.x = (canvas.width - basket.width) / 2;
+
+  clearControls();
+
+  scoreDisplay.textContent = score;
+  missesDisplay.textContent = misses;
+
+  message.textContent = "Ready to play?";
+
+  startButton.disabled = false;
+  startButton.textContent = "▶ Start Game";
+
+  restartButton.disabled = true;
+
+  draw();
+}
+
+function startGame() {
+  if (gameStarted || gameOver) return;
+
+  gameStarted = true;
+  lastSpawn = 0;
+
+  startButton.disabled = true;
+  restartButton.disabled = false;
+
+  message.textContent = "Catch as many as you can!";
+
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function spawnItem() {
+  items.push({
+    x: 20 + Math.random() * (canvas.width - 50),
+    y: -30,
+    size: 30,
+    speed: fallSpeed,
+    emoji: itemEmojis[
+      Math.floor(Math.random() * itemEmojis.length)
+    ]
+  });
+}
+
+function updateBasket() {
+  if (keys["ArrowLeft"]) {
+    basket.x -= basket.speed;
+  }
+
+  if (keys["ArrowRight"]) {
+    basket.x += basket.speed;
+  }
+
+  basket.x = Math.max(
+    0,
+    Math.min(canvas.width - basket.width, basket.x)
+  );
+}
+
+function updateItems(timestamp) {
+  if (timestamp - lastSpawn > spawnInterval) {
+    spawnItem();
+    lastSpawn = timestamp;
+  }
+
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+
+    item.y += item.speed;
+
+    const caught =
+      item.y + item.size >= basket.y &&
+      item.y <= basket.y + basket.height &&
+      item.x + item.size > basket.x &&
+      item.x < basket.x + basket.width;
+
+    if (caught) {
+      items.splice(i, 1);
+      score++;
+
+      scoreDisplay.textContent = score;
+
+      if (score % 5 === 0) {
+        fallSpeed += 0.35;
+
+        spawnInterval = Math.max(
+          400,
+          spawnInterval - 60
+        );
+
+        message.textContent = "🔥 Getting faster!";
+      } else {
+        message.textContent = "✨ Nice catch!";
+      }
+
+      continue;
+    }
+
+    if (item.y > canvas.height) {
+      items.splice(i, 1);
+      misses++;
+
+      missesDisplay.textContent = misses;
+
+      if (misses >= 3) {
+        endGame();
+        return;
+      }
+    }
+  }
+}
+
+function endGame() {
+  gameOver = true;
+  gameStarted = false;
+
+  clearControls();
+
+  message.textContent =
+    "Game Over! Final Score: " + score;
+
+  restartButton.disabled = false;
+  startButton.disabled = true;
+}
+
+function gameLoop(timestamp) {
+  if (!gameStarted || gameOver) {
+    animationId = null;
+    return;
+  }
+
+  updateBasket();
+  updateItems(timestamp);
+  draw();
+
+  if (gameStarted && !gameOver) {
+    animationId = requestAnimationFrame(gameLoop);
+  } else {
+    animationId = null;
+  }
+}
+
+// Keyboard controls
+
+document.addEventListener("keydown", event => {
+  if (
+    event.key === "ArrowLeft" ||
+    event.key === "ArrowRight"
+  ) {
+    event.preventDefault();
+
+    if (gameStarted && !gameOver) {
+      keys[event.key] = true;
+    }
+  }
+});
+
+document.addEventListener("keyup", event => {
+  keys[event.key] = false;
+});
+
+// Touchscreen controls
+
+function setupTouchButton(button, direction) {
+
+  function press(event) {
+    event.preventDefault();
+
+    if (!gameStarted || gameOver) return;
+
+    keys[direction] = true;
+    button.classList.add("pressed");
+
+    if (button.setPointerCapture && event.pointerId !== undefined) {
+      try {
+        button.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // Pointer capture may not be available.
+      }
+    }
+  }
+
+  function release(event) {
+    if (event) event.preventDefault();
+
+    keys[direction] = false;
+    button.classList.remove("pressed");
+  }
+
+  button.addEventListener("pointerdown", press);
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", release);
+  button.addEventListener("contextmenu", event => {
+    event.preventDefault();
+  });
+
+  // Fallback for older mobile browsers.
+  button.addEventListener("touchstart", press, {
+    passive: false
+  });
+
+  button.addEventListener("touchend", release, {
+    passive: false
+  });
+
+  button.addEventListener("touchcancel", release, {
+    passive: false
+  });
+}
+
+setupTouchButton(leftButton, "ArrowLeft");
+setupTouchButton(rightButton, "ArrowRight");
+
+// Release movement controls when the browser loses focus.
+
+window.addEventListener("blur", clearControls);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearControls();
+  }
+});
+
+// Game buttons
+
+startButton.addEventListener("click", startGame);
+restartButton.addEventListener("click", resetGame);
+
+// Initial ready screen
+
+resetGame();
+
+</script>
+
+</body>
+</html>
